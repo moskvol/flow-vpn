@@ -12,7 +12,7 @@
   <img alt="License" src="https://img.shields.io/badge/license-GPL--3.0-blue?style=flat-square">
 </p>
 
-[English](#english)
+## Авторы / Contributors`r`n`r`n- **moskvol** — автор проекта и владелец репозитория.`r`n- **OpenAI Codex (AI assistant)** — помощь с разработкой и подготовкой Android-релиза.`r`n`r`n[English](#english)
 
 ## Скачать
 
@@ -91,4 +91,5 @@ flutter build apk --release
 ```
 
 The APK is written to `build/app/outputs/flutter-apk/app-release.apk`. Configure your own signing key before distributing a production build. See [LICENSE](LICENSE) for GPL-3.0 terms and third-party component notices.
+
 
