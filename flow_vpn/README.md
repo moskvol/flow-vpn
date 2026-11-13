@@ -6,7 +6,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/moskvol/flow-vpn/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/moskvol/flow-vpn?display_name=tag&style=flat-square"></a>
+  <a href="https://github.com/moskvol/flow-vpn/releases/tag/v0.1.0"><img alt="Latest release" src="https://img.shields.io/github/v/tag/moskvol/flow-vpn/v0.1.0?style=flat-square"></a>
   <img alt="Platform" src="https://img.shields.io/badge/platform-Android-3DDC84?style=flat-square&logo=android&logoColor=white">
   <img alt="Flutter" src="https://img.shields.io/badge/Flutter-3.44-02569B?style=flat-square&logo=flutter&logoColor=white">
   <img alt="License" src="https://img.shields.io/badge/license-GPL--3.0-blue?style=flat-square">
@@ -16,7 +16,7 @@
 
 ## Скачать
 
-Откройте [страницу последнего релиза](https://github.com/moskvol/flow-vpn/releases/latest) и скачайте `app-release.apk`. На Android разрешите установку приложения из выбранного источника, затем откройте APK.
+Откройте [страницу последнего релиза](https://github.com/moskvol/flow-vpn/releases/tag/v0.1.0) и скачайте `app-release.apk`. На Android разрешите установку приложения из выбранного источника, затем откройте APK.
 
 > Первые сборки предназначены для тестирования и подписаны отладочным ключом. Это приложение не опубликовано в Google Play. Подключение к VPN требует действующей VLESS-конфигурации или HTTPS-подписки.
 
@@ -66,7 +66,7 @@ Flow VPN is an early Android client for VLESS. It imports VLESS links and HTTPS 
 
 ### Download
 
-Get `app-release.apk` from the [latest release](https://github.com/moskvol/flow-vpn/releases/latest). The initial builds are for testing and use a debug signing key. A working VLESS server or subscription is required.
+Get `app-release.apk` from the [latest release](https://github.com/moskvol/flow-vpn/releases/tag/v0.1.0). The initial builds are for testing and use a debug signing key. A working VLESS server or subscription is required.
 
 ### Features
 
@@ -91,3 +91,4 @@ flutter build apk --release
 ```
 
 The APK is written to `build/app/outputs/flutter-apk/app-release.apk`. Configure your own signing key before distributing a production build. See [LICENSE](LICENSE) for GPL-3.0 terms and third-party component notices.
+
