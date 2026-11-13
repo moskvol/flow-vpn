@@ -1,0 +1,10 @@
+.dart_tool/
+.flutter-plugins*
+build/
+coverage/
+android/.gradle/
+android/local.properties
+windows/flutter/ephemeral/
+*.apk
+*.aab
+*.exe
