@@ -13,6 +13,10 @@ class VlessServer {
   final bool favorite;
   String get id => [uuid, host.toLowerCase(), port, security, transport, sni, path].join('|');
 
+  /// Country flag from the decoded share-link name, or a best-effort country
+  /// match when the provider uses a text label instead of a flag emoji.
+  String get countryFlag => _countryFlag(name, host);
+
   VlessServer withFavorite(bool value) => VlessServer(
     name: name, host: host, port: port, uuid: uuid, link: link,
     security: security, sni: sni, publicKey: publicKey, shortId: shortId,
@@ -56,7 +60,8 @@ class VlessServer {
     if (q['flow'] != null && q['flow']!.isNotEmpty && q['flow'] != 'xtls-rprx-vision') {
       throw const FormatException('Неизвестный VLESS flow');
     }
-    return VlessServer(name: u.fragment.isEmpty ? u.host + ':' + u.port.toString() : u.fragment,
+    final fragment = _decodeFragment(u.fragment);
+    return VlessServer(name: fragment.isEmpty ? u.host + ':' + u.port.toString() : fragment,
       host: u.host, port: u.port, uuid: uuid, link: input.trim(),
       security: security, sni: q['sni'], publicKey: q['pbk'] ?? q['pb'], shortId: q['sid'],
       fingerprint: q['fp'], flow: q['flow'], transport: transport,
@@ -87,6 +92,48 @@ class VlessServer {
   }
 }
 
+String _decodeFragment(String value) {
+  try {
+    return Uri.decodeComponent(value);
+  } on FormatException {
+    return value;
+  }
+}
+
+String _countryFlag(String name, String host) {
+  final flagMatch = RegExp(r'[\u{1F1E6}-\u{1F1FF}]{2}', unicode: true)
+      .firstMatch(name);
+  if (flagMatch != null) return flagMatch.group(0)!;
+
+  final text = '${name.toLowerCase()} ${host.toLowerCase()}';
+  const countries = <String, List<String>>{
+    '🇷🇺': ['russia', 'россия', 'москва', 'ru.'],
+    '🇺🇸': ['usa', 'united states', 'america', 'сша', 'us.'],
+    '🇩🇪': ['germany', 'deutschland', 'германия', 'frankfurt', 'berlin', 'de.'],
+    '🇳🇱': ['netherlands', 'holland', 'нидерланды', 'амстердам', 'nl.'],
+    '🇫🇮': ['finland', 'финляндия', 'helsinki', 'fi.'],
+    '🇸🇪': ['sweden', 'швеция', 'stockholm', 'se.'],
+    '🇬🇧': ['united kingdom', 'great britain', 'england', 'london', 'uk.'],
+    '🇫🇷': ['france', 'франция', 'paris', 'fr.'],
+    '🇸🇬': ['singapore', 'сингапур', 'sg.'],
+    '🇯🇵': ['japan', 'япония', 'tokyo', 'jp.'],
+    '🇰🇷': ['south korea', 'korea', 'корея', 'seoul', 'kr.'],
+    '🇹🇷': ['turkey', 'türkiye', 'турция', 'istanbul', 'tr.'],
+    '🇵🇱': ['poland', 'польша', 'warsaw', 'pl.'],
+    '🇨🇦': ['canada', 'канада', 'ca.'],
+    '🇨🇭': ['switzerland', 'швейцария', 'zurich', 'ch.'],
+    '🇦🇹': ['austria', 'австрия', 'vienna', 'at.'],
+    '🇪🇸': ['spain', 'испания', 'madrid', 'es.'],
+    '🇮🇹': ['italy', 'италия', 'milan', 'it.'],
+    '🇭🇰': ['hong kong', 'гонконг', 'hk.'],
+    '🇦🇪': ['uae', 'united arab emirates', 'оаэ', 'dubai', 'ae.'],
+  };
+  for (final entry in countries.entries) {
+    if (entry.value.any(text.contains)) return entry.key;
+  }
+  return '🌐';
+}
+
 List<VlessServer> parseSubscription(String body) {
   var text = body.trim();
   if (!text.contains('://')) {
@@ -107,3 +154,4 @@ List<VlessServer> parseSubscription(String body) {
   if (unique.isEmpty) throw const FormatException('В подписке нет серверов VLESS');
   return unique.values.toList();
 }
+
