@@ -29,6 +29,9 @@
 
 - Подключение и отключение Android VPN через `VpnService` и sing-box.
 - Импорт одиночных VLESS-ссылок и HTTPS-подписок.
+- Добавление подписки одной кнопкой из буфера обмена, без ручного ввода.
+- Настройка при первом запуске: приветствие, имя, способ проверки задержки и подписка.
+- Поддержка HTTPS-перенаправлений, сжатых ответов и смешанных списков серверов.
 - Параметры TLS, REALITY, WebSocket и gRPC, если они указаны в ссылке.
 - Исправленное отображение percent-encoded названий, флаги стран, поиск, выбор и избранное.
 - TCP-проверка доступности сервера и HTTP-замер через активный VPN.
@@ -80,6 +83,9 @@ Get `app-release.apk` from the [latest release](https://github.com/moskvol/flow-
 
 - Connect and disconnect through Android `VpnService`.
 - Import VLESS links and HTTPS subscriptions.
+- Add a subscription directly from the clipboard, with no manual typing.
+- First-run setup for your name, latency check and subscription.
+- HTTPS redirects, compressed responses and mixed server lists.
 - TLS, REALITY, WebSocket and gRPC link parameters.
 - Fixed percent-encoded server names, country flags, search, selection and favorites.
 - TCP reachability checks and HTTP latency through an active VPN tunnel.
@@ -102,6 +108,5 @@ flutter build apk --release
 ```
 
 The APK is written to `build/app/outputs/flutter-apk/app-release.apk`. Configure your own signing key before distributing a production build. See [LICENSE](LICENSE) for GPL-3.0 terms and third-party component notices.
-
 
 

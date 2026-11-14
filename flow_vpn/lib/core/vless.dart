@@ -41,7 +41,7 @@ class VlessServer {
 
   static VlessServer parse(String input) {
     final u = Uri.tryParse(input.trim());
-    if (u == null || u.scheme != 'vless' || u.host.isEmpty || u.port < 1 || u.port > 65535) {
+    if (u == null || u.scheme != 'vless' || u.host.isEmpty || u.port > 65535) {
       throw const FormatException('Неверная ссылка VLESS');
     }
     final uuid = u.userInfo.toLowerCase();
@@ -49,22 +49,29 @@ class VlessServer {
       throw const FormatException('Неверный UUID VLESS');
     }
     final q = u.queryParameters;
-    final security = q['security'] ?? 'none';
-    final transport = q['type'] ?? 'tcp';
-    if (!{'none', 'tls', 'reality'}.contains(security) || !{'tcp', 'ws', 'grpc'}.contains(transport)) {
+    final security = (q['security'] ?? 'none').toLowerCase();
+    final transport = (q['type'] ?? q['network'] ?? q['net'] ?? 'tcp').toLowerCase();
+    if (!{'none', 'tls', 'xtls', 'reality'}.contains(security) ||
+        !{'tcp', 'raw', 'none', 'ws', 'websocket', 'grpc', 'gun',
+          'http', 'h2', 'httpupgrade', 'quic'}.contains(transport)) {
       throw const FormatException('Режим или транспорт пока не поддерживается');
     }
-    if (security == 'reality' && (q['pbk'] ?? q['pb'] ?? '').isEmpty) {
+    if (security == 'reality' &&
+        (q['pbk'] ?? q['publicKey'] ?? q['public_key'] ?? q['pb'] ?? '').isEmpty) {
       throw const FormatException('REALITY требует public key');
     }
-    if (q['flow'] != null && q['flow']!.isNotEmpty && q['flow'] != 'xtls-rprx-vision') {
+    if (q['flow'] != null && q['flow']!.isNotEmpty &&
+        !{'none', 'xtls-rprx-vision', 'xtls-rprx-vision-udp443'}.contains(q['flow'])) {
       throw const FormatException('Неизвестный VLESS flow');
     }
     final fragment = _decodeFragment(u.fragment);
-    return VlessServer(name: fragment.isEmpty ? u.host + ':' + u.port.toString() : fragment,
-      host: u.host, port: u.port, uuid: uuid, link: input.trim(),
-      security: security, sni: q['sni'], publicKey: q['pbk'] ?? q['pb'], shortId: q['sid'],
-      fingerprint: q['fp'], flow: q['flow'], transport: transport,
+    final port = u.port == 0 ? 443 : u.port;
+    return VlessServer(name: fragment.isEmpty ? '${u.host}:$port' : fragment,
+      host: u.host, port: port, uuid: uuid, link: input.trim(),
+      security: security, sni: q['sni'] ?? q['peer'] ?? q['servername'],
+      publicKey: q['pbk'] ?? q['publicKey'] ?? q['public_key'] ?? q['pb'],
+      shortId: q['sid'] ?? q['shortId'] ?? q['short_id'],
+      fingerprint: q['fp'] ?? q['fingerprint'], flow: q['flow'], transport: transport,
       path: q['path'], serviceName: q['serviceName'], hostHeader: q['host']);
   }
 
@@ -135,23 +142,25 @@ String _countryFlag(String name, String host) {
 }
 
 List<VlessServer> parseSubscription(String body) {
-  var text = body.trim();
+  var text = body.trim().replaceFirst('\uFEFF', '');
   if (!text.contains('://')) {
     try {
-      text = utf8.decode(base64.decode(base64.normalize(text.replaceAll(RegExp(r'\s'), ''))));
+      final encoded = text.replaceAll(RegExp(r'\s'), '')
+          .replaceAll('-', '+').replaceAll('_', '/');
+      text = utf8.decode(base64.decode(base64.normalize(encoded)));
     } on FormatException {
       throw const FormatException('Неизвестный формат подписки');
     }
   }
   final unique = <String, VlessServer>{};
-  for (final line in const LineSplitter().convert(text)) {
-    final value = line.trim();
-    if (value.startsWith('vless://')) {
-      final server = VlessServer.parse(value);
+  for (final match in RegExp(r'vless://[^\s]+', caseSensitive: false).allMatches(text)) {
+    try {
+      final server = VlessServer.parse(match.group(0)!);
       unique[server.id] = server;
+    } on FormatException {
+      // A subscription can contain profiles this client cannot use.
     }
   }
   if (unique.isEmpty) throw const FormatException('В подписке нет серверов VLESS');
   return unique.values.toList();
 }
-

@@ -34,7 +34,9 @@ class AndroidVpnEngine implements VpnEngine {
     if (!await SingBox.instance.requestNotificationPermission()) {
       // Android may allow the tunnel even when notifications are hidden.
     }
-    await SingBox.instance.connect(jsonEncode(server.toOutbound()));
+    // Let sing_box parse the original share link: it preserves options such as
+    // ALPN and transport settings that are not represented by VlessServer.
+    await SingBox.instance.connect(server.link);
     _current = server;
   }
 

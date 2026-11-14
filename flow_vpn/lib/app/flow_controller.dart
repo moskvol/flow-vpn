@@ -78,12 +78,13 @@ class FlowController extends Notifier<FlowState> {
   Future<void> addSubscription(String url, String name) async {
     state = state.copyWith(busy: true, error: null);
     try {
+      final source = url.trim();
       VpnSubscription? previous;
       for (final subscription in state.subscriptions) {
-        if (subscription.url == url) previous = subscription;
+        if (subscription.url == source) previous = subscription;
       }
-      final updated = await _repository.fetch(url, name: name, previous: previous);
-      final list = [...state.subscriptions.where((s) => s.url != url), updated];
+      final updated = await _repository.fetch(source, name: name, previous: previous);
+      final list = [...state.subscriptions.where((s) => s.url != source), updated];
       await _repository.save(list);
       state = FlowState(subscriptions: list,
         selectedId: state.selectedId ?? updated.servers.first.id,

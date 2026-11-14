@@ -26,4 +26,19 @@ void main() {
     expect(() => VlessServer.parse(link.replaceFirst('flow=xtls-rprx-vision', 'type=xhttp')),
       throwsFormatException);
   });
+
+  test('keeps usable servers when a subscription contains an unsupported profile', () {
+    final body = '\uFEFF$link\n'
+      '${link.replaceFirst('flow=xtls-rprx-vision', 'type=xhttp')}\n'
+      '${link.replaceFirst('flow=xtls-rprx-vision', 'type=h2')}';
+    final servers = parseSubscription(body);
+    expect(servers.length, 2);
+    expect(servers.last.transport, 'h2');
+  });
+
+  test('uses the standard VLESS port when a link omits it', () {
+    final server = VlessServer.parse(
+      'vless://00000000-0000-4000-8000-000000000001@example.com?security=tls');
+    expect(server.port, 443);
+  });
 }

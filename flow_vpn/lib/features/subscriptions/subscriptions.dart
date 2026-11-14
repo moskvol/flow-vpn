@@ -30,7 +30,7 @@ class SubscriptionRepository {
   final FlutterSecureStorage _storage;
   static const _key = 'flow_vpn_subscriptions_v1';
   static const _selectedKey = 'flow_vpn_selected_server_v1';
-  static const _maxBytes = 1024 * 1024;
+  static const _maxBytes = 5 * 1024 * 1024;
 
   Future<List<VpnSubscription>> load() async {
     final raw = await _storage.read(key: _key);
@@ -50,31 +50,65 @@ class SubscriptionRepository {
 
   Future<VpnSubscription> fetch(String url, {String? name,
       VpnSubscription? previous}) async {
-    final uri = Uri.tryParse(url.trim());
-    if (uri == null || uri.scheme != 'https' || uri.host.isEmpty ||
-        uri.userInfo.isNotEmpty) {
-      throw const FormatException('Требуется HTTPS-ссылка подписки');
+    final input = url.trim();
+    final direct = input.startsWith('vless://');
+    final uri = Uri.tryParse(input);
+    if (uri == null || (!direct && !_validSubscriptionUri(uri))) {
+      throw const FormatException('Вставьте HTTPS-ссылку подписки или VLESS-ссылку');
     }
     final client = HttpClient()..connectionTimeout = const Duration(seconds: 12);
-    client.autoUncompress = false;
     try {
-      final request = await client.getUrl(uri);
-      request.followRedirects = false;
-      final response = await request.close().timeout(const Duration(seconds: 20));
+      HttpClientResponse? response;
+      var location = uri;
+      if (!direct) {
+        for (var redirects = 0; redirects <= 5; redirects++) {
+          final request = await client.getUrl(location)
+              .timeout(const Duration(seconds: 20));
+          request.followRedirects = false;
+          response = await request.close().timeout(const Duration(seconds: 20));
+          if (![301, 302, 303, 307, 308].contains(response.statusCode)) break;
+          final target = response.headers.value(HttpHeaders.locationHeader);
+          if (target == null || redirects == 5) {
+            throw const HttpException('Слишком много перенаправлений подписки');
+          }
+          final next = location.resolve(target);
+          if (!_validSubscriptionUri(next)) {
+            throw const FormatException('Перенаправление подписки должно вести на HTTPS');
+          }
+          await response.drain<void>();
+          location = next;
+        }
+      }
+      if (direct) {
+        return _subscriptionFromText(input, input, uri.host, name, previous);
+      }
+      if (response == null) throw const HttpException('Нет ответа сервера подписки');
       if (response.statusCode != 200) {
         throw HttpException('Ошибка загрузки: HTTP ' + response.statusCode.toString());
       }
       if (response.contentLength > _maxBytes) {
-        throw const FormatException('Подписка превышает 1 МБ');
+        throw const FormatException('Подписка превышает 5 МБ');
       }
       final bytes = <int>[];
       await for (final chunk in response.timeout(const Duration(seconds: 20))) {
         bytes.addAll(chunk);
         if (bytes.length > _maxBytes) {
-          throw const FormatException('Подписка превышает 1 МБ');
+          throw const FormatException('Подписка превышает 5 МБ');
         }
       }
-      final parsed = parseSubscription(utf8.decode(bytes, allowMalformed: false));
+      return _subscriptionFromText(utf8.decode(bytes, allowMalformed: false),
+          input, location.host, name, previous);
+    } finally {
+      client.close(force: true);
+    }
+  }
+
+  bool _validSubscriptionUri(Uri uri) => uri.scheme == 'https' &&
+      uri.host.isNotEmpty && uri.userInfo.isEmpty;
+
+  VpnSubscription _subscriptionFromText(String body, String source,
+      String fallbackName, String? name, VpnSubscription? previous) {
+      final parsed = parseSubscription(body);
       if (parsed.length > 500) {
         throw const FormatException('Слишком много серверов в подписке');
       }
@@ -83,12 +117,9 @@ class SubscriptionRepository {
           server.id: server.favorite
       };
       final servers = parsed.map((s) => s.withFavorite(favorites[s.id] ?? false)).toList();
-      return VpnSubscription(url: uri.toString(),
+      return VpnSubscription(url: source,
         name: name?.trim().isNotEmpty == true ? name!.trim() :
-          previous?.name ?? uri.host,
+          previous?.name ?? fallbackName,
         servers: servers, updatedAt: DateTime.now());
-    } finally {
-      client.close(force: true);
-    }
   }
 }

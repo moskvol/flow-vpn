@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:sing_box/sing_box.dart';
 
@@ -35,6 +36,14 @@ const _themes = <String, (String, Color)>{
   'graphite': ('Графит', Color(0xFF727983)),
 };
 
+String _greeting() {
+  final hour = DateTime.now().hour;
+  if (hour < 6) return 'Доброй ночи';
+  if (hour < 12) return 'Доброе утро';
+  if (hour < 18) return 'Добрый день';
+  return 'Добрый вечер';
+}
+
 class FlowApp extends ConsumerStatefulWidget {
   const FlowApp({super.key});
   @override
@@ -42,28 +51,169 @@ class FlowApp extends ConsumerStatefulWidget {
 }
 
 class _FlowAppState extends ConsumerState<FlowApp> {
+  bool _loading = true;
   @override
   void initState() {
     super.initState();
-    Future.microtask(() => ref.read(flowProvider.notifier).load());
-    Future.microtask(() => ref.read(preferencesProvider.notifier).load());
+    Future.microtask(_bootstrap);
+  }
+
+  Future<void> _bootstrap() async {
+    await Future.wait([
+      ref.read(flowProvider.notifier).load(),
+      ref.read(preferencesProvider.notifier).load(),
+    ]);
+    if (mounted) setState(() => _loading = false);
   }
   @override
   Widget build(BuildContext context) {
     final prefs = ref.watch(preferencesProvider);
     final seed = _themes[prefs.theme]?.$2 ?? _themes['violet']!.$2;
+    final theme = ThemeData(useMaterial3: true,
+      colorScheme: ColorScheme.fromSeed(seedColor: seed),
+      scaffoldBackgroundColor: const Color(0xFFF9F7FF));
+    final darkTheme = ThemeData(useMaterial3: true,
+      colorScheme: ColorScheme.fromSeed(seedColor: seed, brightness: Brightness.dark));
+    if (_loading || !prefs.setupComplete) {
+      return MaterialApp(
+        title: 'Flow VPN', debugShowCheckedModeBanner: false,
+        themeMode: ThemeMode.system, theme: theme, darkTheme: darkTheme,
+        home: _loading ? const Scaffold(body: Center(child: CircularProgressIndicator())) :
+          OnboardingScreen(onFinished: () => setState(() {})));
+    }
     return MaterialApp.router(
       title: 'Flow VPN',
       debugShowCheckedModeBanner: false,
       routerConfig: router,
       themeMode: ThemeMode.system,
-      theme: ThemeData(useMaterial3: true,
-        colorScheme: ColorScheme.fromSeed(seedColor: seed),
-        scaffoldBackgroundColor: const Color(0xFFF9F7FF)),
-      darkTheme: ThemeData(useMaterial3: true,
-        colorScheme: ColorScheme.fromSeed(seedColor: seed, brightness: Brightness.dark)),
+      theme: theme,
+      darkTheme: darkTheme,
     );
   }
+}
+
+class OnboardingScreen extends ConsumerStatefulWidget {
+  const OnboardingScreen({required this.onFinished, super.key});
+  final VoidCallback onFinished;
+  @override
+  ConsumerState<OnboardingScreen> createState() => _OnboardingScreenState();
+}
+
+class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
+  final _name = TextEditingController();
+  final _url = TextEditingController();
+  int _step = 0;
+  String _ping = 'tcp';
+  bool _working = false;
+  String? _error;
+
+  @override
+  void dispose() { _name.dispose(); _url.dispose(); super.dispose(); }
+
+  Future<void> _finish() async {
+    setState(() { _working = true; _error = null; });
+    if (_url.text.trim().isNotEmpty) {
+      await ref.read(flowProvider.notifier).addSubscription(_url.text, '');
+      final error = ref.read(flowProvider).error;
+      if (error != null) {
+        if (mounted) setState(() { _working = false; _error = error; });
+        return;
+      }
+    }
+    try {
+      final prefs = ref.read(preferencesProvider);
+      await ref.read(preferencesProvider.notifier).update(prefs.copyWith(
+        userName: _name.text.trim(), pingMethod: _ping, setupComplete: true));
+      if (mounted) widget.onFinished();
+    } catch (_) {
+      if (mounted) setState(() { _working = false;
+        _error = 'Не удалось сохранить настройку. Попробуйте ещё раз.'; });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final title = switch (_step) {
+      0 => _greeting(),
+      1 => 'Как к вам обращаться?',
+      2 => 'Проверка задержки',
+      _ => 'Добавьте подписку',
+    };
+    return Scaffold(body: SafeArea(child: Center(child: ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 520),
+      child: Padding(padding: const EdgeInsets.all(24), child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          const Spacer(),
+          Icon(Icons.shield_moon_rounded, size: 72,
+            color: Theme.of(context).colorScheme.primary),
+          const SizedBox(height: 24),
+          Text(title, textAlign: TextAlign.center,
+            style: Theme.of(context).textTheme.headlineMedium),
+          const SizedBox(height: 16),
+          if (_step == 0) const Text('Давайте настроим Flow VPN за пару шагов.',
+            textAlign: TextAlign.center),
+          if (_step == 1) TextField(controller: _name, autofocus: true,
+            textCapitalization: TextCapitalization.words,
+            decoration: const InputDecoration(labelText: 'Ваше имя',
+              border: OutlineInputBorder())),
+          if (_step == 2) Card(child: Column(children: [
+            RadioListTile<String>(value: 'tcp', groupValue: _ping,
+              title: const Text('TCP до сервера'),
+              subtitle: const Text('Работает до подключения'),
+              onChanged: (value) => setState(() => _ping = value ?? 'tcp')),
+            RadioListTile<String>(value: 'http', groupValue: _ping,
+              title: const Text('HTTP через VPN'),
+              subtitle: const Text('Доступен после подключения'),
+              onChanged: (value) => setState(() => _ping = value ?? 'http')),
+          ])),
+          if (_step == 3) ...[
+            const Text('Вставьте HTTPS-ссылку подписки или VLESS-ссылку. '
+              'Этот шаг можно пропустить.'),
+            const SizedBox(height: 12),
+            TextField(controller: _url, keyboardType: TextInputType.url,
+              decoration: const InputDecoration(labelText: 'Ссылка подписки',
+                border: OutlineInputBorder())),
+            const SizedBox(height: 8),
+            OutlinedButton.icon(onPressed: () => _pasteLink(_url, context),
+              icon: const Icon(Icons.content_paste_rounded),
+              label: const Text('Вставить из буфера')),
+          ],
+          if (_error != null) Padding(padding: const EdgeInsets.only(top: 12),
+            child: Text(_error!, style: TextStyle(color: Theme.of(context).colorScheme.error))),
+          const Spacer(),
+          Row(children: [
+            if (_step > 0) TextButton(onPressed: _working ? null :
+              () => setState(() { _step--; _error = null; }), child: const Text('Назад')),
+            const Spacer(),
+            FilledButton(onPressed: _working ? null : () {
+              if (_step == 1 && _name.text.trim().isEmpty) {
+                setState(() => _error = 'Введите имя');
+                return;
+              }
+              if (_step < 3) setState(() { _step++; _error = null; });
+              else _finish();
+            }, child: Text(_step == 3 ? 'Завершить' : 'Далее')),
+          ]),
+        ])),
+    ))));
+  }
+}
+
+Future<void> _pasteLink(TextEditingController controller, BuildContext context) async {
+  String? value;
+  try {
+    value = (await Clipboard.getData(Clipboard.kTextPlain))?.text?.trim();
+  } on PlatformException {
+    if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Не удалось прочитать буфер обмена')));
+    return;
+  }
+  if (value == null || value.isEmpty) {
+    if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('В буфере обмена нет ссылки')));
+    return;
+  }
+  controller.text = value;
 }
 
 class FlowShell extends ConsumerWidget {
@@ -118,6 +268,7 @@ class HomeScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final state = ref.watch(flowProvider);
+    final name = ref.watch(preferencesProvider).userName;
     final server = state.selected;
     final active = state.phase == VpnPhase.connected;
     final moving = state.phase == VpnPhase.connecting ||
@@ -128,7 +279,7 @@ class HomeScreen extends ConsumerWidget {
       child: ListView(padding: const EdgeInsets.all(24), children: [
         const SizedBox(height: 24),
         Text(active ? (Platform.isWindows ? 'VPN-ядро запущено' : 'VPN подключён') :
-          moving ? 'Подключение…' : 'Готовы к подключению',
+          moving ? 'Подключение…' : '${_greeting()}, $name',
           textAlign: TextAlign.center, style: Theme.of(context).textTheme.headlineMedium),
         const SizedBox(height: 32),
         Center(child: AnimatedContainer(
@@ -271,6 +422,10 @@ class SubscriptionsScreen extends ConsumerWidget {
     return ListView(padding: const EdgeInsets.all(20), children: [
       FilledButton.icon(onPressed: state.busy ? null : () => _add(context, ref),
         icon: const Icon(Icons.add_rounded), label: const Text('Добавить подписку')),
+      const SizedBox(height: 8),
+      OutlinedButton.icon(onPressed: state.busy ? null : () => _addFromClipboard(context, ref),
+        icon: const Icon(Icons.content_paste_rounded),
+        label: const Text('Добавить из буфера')),
       const SizedBox(height: 12),
       if (state.busy) const LinearProgressIndicator(),
       for (final sub in state.subscriptions) _SubscriptionCard(subscription: sub),
@@ -284,7 +439,12 @@ class SubscriptionsScreen extends ConsumerWidget {
         title: const Text('Добавить подписку'),
         content: SizedBox(width: 440, child: Column(mainAxisSize: MainAxisSize.min, children: [
           TextField(controller: url, decoration: const InputDecoration(
-            labelText: 'HTTPS-ссылка подписки')),
+            labelText: 'HTTPS-подписка или VLESS-ссылка')),
+          Align(alignment: Alignment.centerRight,
+            child: TextButton.icon(
+              onPressed: () => _pasteLink(url, dialogContext),
+              icon: const Icon(Icons.content_paste_rounded),
+              label: const Text('Вставить из буфера'))),
           const SizedBox(height: 12),
           TextField(controller: name, decoration: const InputDecoration(
             labelText: 'Название (необязательно)')),
@@ -302,6 +462,23 @@ class SubscriptionsScreen extends ConsumerWidget {
       url.dispose();
       name.dispose();
     }
+  }
+
+  Future<void> _addFromClipboard(BuildContext context, WidgetRef ref) async {
+    String? value;
+    try {
+      value = (await Clipboard.getData(Clipboard.kTextPlain))?.text?.trim();
+    } on PlatformException {
+      if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Не удалось прочитать буфер обмена')));
+      return;
+    }
+    if (value == null || value.isEmpty) {
+      if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('В буфере обмена нет ссылки')));
+      return;
+    }
+    await ref.read(flowProvider.notifier).addSubscription(value, '');
   }
 }
 
@@ -415,7 +592,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       const SizedBox(height: 12),
       const Card(child: ListTile(
         leading: Icon(Icons.info_outline_rounded),
-        title: Text('Flow VPN 0.2.0'),
+        title: Text('Flow VPN 0.3.0'),
         subtitle: Text('Вертикальный срез: VLESS, TLS, REALITY, WebSocket, gRPC. '
           'Проверка работоспособности зависит от ядра и вашего сервера.'),
       )),
@@ -482,4 +659,3 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     }
   }
 }
-
