@@ -35,6 +35,9 @@
 - Параметры TLS, REALITY, WebSocket и gRPC, если они указаны в ссылке.
 - Исправленное отображение percent-encoded названий, флаги стран, поиск, выбор и избранное.
 - TCP-проверка доступности сервера и HTTP-замер через активный VPN.
+- Via Proxy GET и HEAD, а также последовательная TCP-проверка всех серверов.
+- Автообновление подписок каждые 6, 12 или 24 часа.
+- Компактные карточки и отключаемые анимации.
 - Раздельное туннелирование Android: все приложения, исключения или список приложений через VPN; обход LAN.
 - Восемь цветовых схем, системный светлый и тёмный режим.
 - Защищённое системное хранилище для конфигураций.
@@ -89,6 +92,9 @@ Get `app-release.apk` from the [latest release](https://github.com/moskvol/flow-
 - TLS, REALITY, WebSocket and gRPC link parameters.
 - Fixed percent-encoded server names, country flags, search, selection and favorites.
 - TCP reachability checks and HTTP latency through an active VPN tunnel.
+- Via Proxy GET and HEAD checks, plus sequential TCP checks for all servers.
+- Automatic subscription refresh every 6, 12 or 24 hours.
+- Compact cards and optional animations.
 - Android split tunneling: all apps, selected exclusions, or selected apps only; LAN bypass.
 - Eight color themes with system light and dark mode.
 - Device secure storage for configuration data.
